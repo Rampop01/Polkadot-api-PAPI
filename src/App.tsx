@@ -1,8 +1,23 @@
-import { useState} from 'react';
+import { useState } from 'react';
 import { web3Accounts, web3Enable } from '@polkadot/extension-dapp';
 import type { InjectedAccountWithMeta } from '@polkadot/extension-inject/types';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import './index.css';
+
+type AccountData = {
+  free: string;
+  reserved: string;
+  miscFrozen: string;
+  feeFrozen: string;
+};
+
+type AccountJson = {
+  nonce: string;
+  consumers: string;
+  providers: string;
+  sufficients: string;
+  data: AccountData;
+};
 
 function App() {
   const [accounts, setAccounts] = useState<InjectedAccountWithMeta[]>([]);
@@ -11,7 +26,6 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [api, setApi] = useState<ApiPromise | null>(null);
 
-  // Connect to Polkadot API
   const initApi = async () => {
     const provider = new WsProvider('wss://rpc.polkadot.io');
     const api = await ApiPromise.create({ provider });
@@ -19,7 +33,12 @@ function App() {
     return api;
   };
 
-  // Connect wallet & fetch account info
+  const getBalance = async (address: string, api: ApiPromise) => {
+    const account = await api.query.system.account(address);
+    const accountJson = account.toJSON() as AccountJson;
+    setBalance(accountJson.data.free);
+  };
+
   const connectWallet = async () => {
     const extensions = await web3Enable('My PAPI Dapp');
     if (!extensions.length) {
@@ -38,28 +57,22 @@ function App() {
     setSelectedAccount(firstAddress);
 
     const api = await initApi();
-    const { data: balanceData } = await api.query.system.account(firstAddress);
-    setBalance(balanceData.free.toHuman());
+    await getBalance(firstAddress, api);
   };
 
-  // Refresh balance
   const refreshBalance = async () => {
     if (!selectedAccount || !api) return;
-    const { data: balanceData } = await api.query.system.account(selectedAccount);
-    setBalance(balanceData.free.toHuman());
+    await getBalance(selectedAccount, api);
   };
 
-  // Handle account change
   const handleAccountChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const addr = e.target.value;
     setSelectedAccount(addr);
     if (api) {
-      const { data: balanceData } = await api.query.system.account(addr);
-      setBalance(balanceData.free.toHuman());
+      await getBalance(addr, api);
     }
   };
 
-  // Copy address
   const copyToClipboard = () => {
     if (!selectedAccount) return;
     navigator.clipboard.writeText(selectedAccount);
@@ -67,7 +80,6 @@ function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Disconnect wallet
   const disconnectWallet = () => {
     setSelectedAccount(null);
     setAccounts([]);
@@ -75,8 +87,6 @@ function App() {
     setApi(null);
     setCopied(false);
   };
-
-  
 
   return (
     <div className="min-h-screen bg-white text-pink-600 p-6 font-sans flex flex-col items-center justify-center">
